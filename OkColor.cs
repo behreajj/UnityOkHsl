@@ -100,7 +100,8 @@ public static class OkColor
             double f1 = wl * l_dS + wm * m_dS + ws * s_dS;
             double f2 = wl * l_dS2 + wm * m_dS2 + ws * s_dS2;
 
-            S = S - f * f1 / (f1 * f1 - 0.5d * f * f2);
+            double sDenom = (f1 * f1 - 0.5d * f * f2);
+            if (sDenom != 0.0d) { S = S - f * f1 / sDenom; }
         }
 
         return S;
@@ -126,18 +127,20 @@ public static class OkColor
     private static double FindGamutIntersection (in double a, in double b, in double L1, in double C1, in double L0, (double L, double C) cusp)
     {
         // Find the intersection for upper and lower half seprately
-        double t;
+        double t = 0.0d;
         if (((L1 - L0) * cusp.C - (cusp.L - L0) * C1) <= 0.0d)
         {
             // Lower half
-            t = cusp.C * L0 / (C1 * cusp.L + cusp.C * (L0 - L1));
+            double tDenom = (C1 * cusp.L + cusp.C * (L0 - L1));
+            if (tDenom != 0.0d) { t = cusp.C * L0 / tDenom; }
         }
         else
         {
             // Upper half
 
             // First intersect with triangle
-            t = cusp.C * (L0 - 1.0d) / (C1 * (cusp.L - 1.0d) + cusp.C * (L0 - L1));
+            double tDenom = C1 * (cusp.L - 1.0d) + cusp.C * (L0 - L1);
+            if (tDenom != 0.0d) { t = cusp.C * (L0 - 1.0d) / tDenom; }
 
             // Then one step Halley's method
             {
@@ -177,204 +180,36 @@ public static class OkColor
                     double r1 = 4.0767416621d * ldt - 3.3077115913d * mdt + 0.2309699292d * sdt;
                     double r2 = 4.0767416621d * ldt2 - 3.3077115913d * mdt2 + 0.2309699292d * sdt2;
 
-                    double u_r = r1 / (r1 * r1 - 0.5d * r0 * r2);
-                    double t_r = -r0 * u_r;
+                    double rDenom = r1 * r1 - 0.5d * r0 * r2;
+                    double ur = (rDenom != 0.0d) ? r1 / rDenom : 0.0d;
+                    double tr = -r0 * ur;
 
                     double g0 = -1.2684380046d * l + 2.6097574011d * m - 0.3413193965d * s - 1.0d;
                     double g1 = -1.2684380046d * ldt + 2.6097574011d * mdt - 0.3413193965d * sdt;
                     double g2 = -1.2684380046d * ldt2 + 2.6097574011d * mdt2 - 0.3413193965d * sdt2;
 
-                    double u_g = g1 / (g1 * g1 - 0.5d * g0 * g2);
-                    double t_g = -g0 * u_g;
+                    double gDenom = g1 * g1 - 0.5d * g0 * g2;
+                    double ug = (gDenom != 0.0d) ? g1 / gDenom : 0.0d;
+                    double tg = -g0 * ug;
 
                     double b0 = -0.0041960863d * l - 0.7034186147d * m + 1.7076147010d * s - 1.0d;
                     double b1 = -0.0041960863d * ldt - 0.7034186147d * mdt + 1.7076147010d * sdt;
                     double b2 = -0.0041960863d * ldt2 - 0.7034186147d * mdt2 + 1.7076147010d * sdt2;
 
-                    double u_b = b1 / (b1 * b1 - 0.5d * b0 * b2);
-                    double t_b = -b0 * u_b;
+                    double bDenom = b1 * b1 - 0.5d * b0 * b2;
+                    double ub = (bDenom != 0.0d) ? b1 / bDenom : 0.0d;
+                    double tb = -b0 * ub;
 
-                    t_r = u_r >= 0.0d ? t_r : Single.MaxValue;
-                    t_g = u_g >= 0.0d ? t_g : Single.MaxValue;
-                    t_b = u_b >= 0.0d ? t_b : Single.MaxValue;
+                    tr = ur >= 0.0d ? tr : Single.MaxValue;
+                    tg = ug >= 0.0d ? tg : Single.MaxValue;
+                    tb = ub >= 0.0d ? tb : Single.MaxValue;
 
-                    t = t + Math.Min (t_r, Math.Min (t_g, t_b));
+                    t = t + Math.Min (tr, Math.Min (tg, tb));
                 }
             }
         }
 
         return t;
-    }
-
-    private static (double r, double g, double b) GamutClipPreserveChroma (in (double r, double g, double b) rgb)
-    {
-        double r = rgb.r;
-        double g = rgb.r;
-        double b = rgb.r;
-
-        if (r < 1.0d && g < 1.0d && b < 1.0d && r > 0.0d && g > 0.0d && b > 0.0d)
-        {
-            return (r: r, g: g, b: b);
-        }
-
-        var lab = OkColor.LinearSrgbToOkLab (rgb);
-        double aLab = lab.a;
-        double bLab = lab.b;
-        double csq = aLab * aLab + bLab * bLab;
-        double C = csq > 0.0d ? Math.Sqrt (csq) : Single.Epsilon;
-        double a_ = aLab / C;
-        double b_ = bLab / C;
-
-        double L = lab.L;
-        double L0 = (L < 0.0d) ? 0.0d : (L > 1.0d) ? 1.0d : L;
-
-        var cusp = OkColor.FindCusp (a_, b_);
-        double t = OkColor.FindGamutIntersection (a_, b_, L, C, L0, cusp);
-        double L_clipped = (1.0d - t) * L0 + t * L;
-        double C_clipped = t * C;
-
-        return OkColor.OkLabToLinearSrgb ((
-            L: L_clipped,
-            a: C_clipped * a_,
-            b: C_clipped * b_));
-    }
-
-    private static (double r, double g, double b) GamutClipProjectTo05 (in (double r, double g, double b) rgb)
-    {
-        double r = rgb.r;
-        double g = rgb.r;
-        double b = rgb.r;
-
-        if (r < 1.0d && g < 1.0d && b < 1.0d && r > 0.0d && g > 0.0d && b > 0.0d)
-        {
-            return (r: r, g: g, b: b);
-        }
-
-        var lab = OkColor.LinearSrgbToOkLab (rgb);
-        double aLab = lab.a;
-        double bLab = lab.b;
-        double csq = aLab * aLab + bLab * bLab;
-        double C = csq > 0.0d ? Math.Sqrt (csq) : Single.Epsilon;
-        double a_ = aLab / C;
-        double b_ = bLab / C;
-
-        double L = lab.L;
-        double L0 = 0.5d;
-
-        var cusp = OkColor.FindCusp (a_, b_);
-        double t = OkColor.FindGamutIntersection (a_, b_, L, C, L0, cusp);
-        double L_clipped = L0 * (1 - t) + t * L;
-        double C_clipped = t * C;
-
-        return OkColor.OkLabToLinearSrgb ((
-            L: L_clipped,
-            a: C_clipped * a_,
-            b: C_clipped * b_));
-    }
-
-    private static (double r, double g, double b) GamutClipProjectToLCusp (in (double r, double g, double b) rgb)
-    {
-        double r = rgb.r;
-        double g = rgb.r;
-        double b = rgb.r;
-
-        if (r < 1.0d && g < 1.0d && b < 1.0d && r > 0.0d && g > 0.0d && b > 0.0d)
-        {
-            return (r: r, g: g, b: b);
-        }
-
-        var lab = OkColor.LinearSrgbToOkLab (rgb);
-        double aLab = lab.a;
-        double bLab = lab.b;
-        double csq = aLab * aLab + bLab * bLab;
-        double C = csq > 0.0d ? Math.Sqrt (csq) : Single.Epsilon;
-        double a_ = aLab / C;
-        double b_ = bLab / C;
-
-        var cusp = OkColor.FindCusp (a_, b_);
-        double L0 = cusp.L;
-        double L = lab.L;
-        double t = OkColor.FindGamutIntersection (a_, b_, L, C, L0, cusp);
-
-        double L_clipped = (1.0d - t) * L0 + t * L;
-        double C_clipped = t * C;
-
-        return OkColor.OkLabToLinearSrgb ((
-            L: L_clipped,
-            a: C_clipped * a_,
-            b: C_clipped * b_));
-    }
-
-    private static (double r, double g, double b) GamutClipAdaptiveL005 (in (double r, double g, double b) rgb, in double alpha = 0.5d)
-    {
-        double r = rgb.r;
-        double g = rgb.r;
-        double b = rgb.r;
-
-        if (r < 1.0d && g < 1.0d && b < 1.0d && r > 0.0d && g > 0.0d && b > 0.0d)
-        {
-            return (r: r, g: g, b: b);
-        }
-
-        var lab = OkColor.LinearSrgbToOkLab (rgb);
-        double aLab = lab.a;
-        double bLab = lab.b;
-        double csq = aLab * aLab + bLab * bLab;
-        double C = csq > 0.0d ? Math.Sqrt (csq) : Single.Epsilon;
-        double a_ = aLab / C;
-        double b_ = bLab / C;
-
-        double L = lab.L;
-        double Ld = L - 0.5d;
-        double e1 = 0.5d + Math.Abs (Ld) + alpha * C;
-        double L0 = 0.5d * (1.0d + Math.Sign (Ld) * (e1 - Math.Sqrt (e1 * e1 - 2.0d * Math.Abs (Ld))));
-
-        var cusp = FindCusp (a_, b_);
-        double t = FindGamutIntersection (a_, b_, L, C, L0, cusp);
-        double L_clipped = L0 * (1.0d - t) + t * L;
-        double C_clipped = t * C;
-
-        return OkLabToLinearSrgb ((
-            L: L_clipped,
-            a: C_clipped * a_,
-            b: C_clipped * b_));
-    }
-
-    private static (double r, double g, double b) GamutClipAdaptiveL0LCusp (in (double r, double g, double b) rgb, in double alpha = 0.5d)
-    {
-        double r = rgb.r;
-        double g = rgb.r;
-        double b = rgb.r;
-
-        if (r < 1.0d && g < 1.0d && b < 1.0d && r > 0.0d && g > 0.0d && b > 0.0d)
-        {
-            return (r: r, g: g, b: b);
-        }
-
-        var lab = OkColor.LinearSrgbToOkLab (rgb);
-        double aLab = lab.a;
-        double bLab = lab.b;
-        double csq = aLab * aLab + bLab * bLab;
-        double C = csq > 0.0d ? Math.Sqrt (csq) : Single.Epsilon;
-        double a_ = aLab / C;
-        double b_ = bLab / C;
-
-        var cusp = OkColor.FindCusp (a_, b_);
-        double L = lab.L;
-        double Ld = L - cusp.L;
-        double k = 2.0d * (Ld > 0.0d ? 1.0d - cusp.L : cusp.L);
-
-        double e1 = 0.5f * k + Math.Abs (Ld) + alpha * C / k;
-        double L0 = cusp.L + 0.5d * (Math.Sign (Ld) * (e1 - Math.Sqrt (e1 * e1 - 2.0d * k * Math.Abs (Ld))));
-
-        double t = OkColor.FindGamutIntersection (a_, b_, L, C, L0, cusp);
-        double L_clipped = L0 * (1.0d - t) + t * L;
-        double C_clipped = t * C;
-
-        return OkLabToLinearSrgb ((
-            L: L_clipped,
-            a: C_clipped * a_,
-            b: C_clipped * b_));
     }
 
     private static (double C_0, double C_mid, double C_max) GetCs (in double L, in double a_, in double b_)
@@ -412,22 +247,25 @@ public static class OkColor
         return (C_0: C_0, C_mid: C_mid, C_max: C_max);
     }
 
+    // Returns a smooth approximation of the location of the cusp
+    // This polynomial was created by an optimization process
+    // It has been designed so that S_mid < S_max and T_mid < T_max
     private static (double S, double T) GetSTMid (in double a_, in double b_)
     {
         double S = 0.11516993d;
-        double sDenom = (7.4477897d + 4.1590124d * b_ +
+        double sDenom = 7.4477897d + 4.1590124d * b_ +
             a_ * (-2.19557347d + 1.75198401d * b_ +
                 a_ * (-2.13704948d - 10.02301043d * b_ +
                     a_ * (-4.24894561d + 5.38770819d * b_ +
-                        4.69891013d * a_))));
-        S += 1.0d / sDenom;
+                        4.69891013d * a_)));
+        if (sDenom != 0.0d) { S += 1.0d / sDenom; }
 
         double T = 0.11239642d;
-        double tDenom = (1.6132032d - 0.68124379d * b_ +
+        double tDenom = 1.6132032d - 0.68124379d * b_ +
             a_ * (0.40370612d + 0.90148123d * b_ +
                 a_ * (-0.27087943d + 0.6122399d * b_ +
-                    a_ * (0.00299215d - 0.45399568d * b_ - 0.14661872d * a_))));
-        T += 1.0d / tDenom;
+                    a_ * (0.00299215d - 0.45399568d * b_ - 0.14661872d * a_)));
+        if (tDenom != 0.0d) { T += 1.0d / tDenom; }
 
         return (S: S, T: T);
     }
@@ -457,8 +295,12 @@ public static class OkColor
         // With single-precision numbers, this can generate invalid values, NaNs, infinities, etc.
 
         double l = hsl.l;
-        if (l > 1.0d - Single.Epsilon) { return (L: 1.0d, a: 0.0d, b: 0.0d); }
-        if (l < Single.Epsilon) { return (L: 0.0d, a: 0.0d, b: 0.0d); }
+        if (l >= 1.0d) { return (L: 1.0d, a: 0.0d, b: 0.0d); }
+        if (l <= 0.0d) { return (L: 0.0d, a: 0.0d, b: 0.0d); }
+
+        double s = hsl.s;
+        if (s < 0.0d) { s = 0.0d; }
+        if (s > 1.0d) { s = 1.0d; }
 
         double hRad = hsl.h * 6.283185307179586d;
         double a_ = Math.Cos (hRad);
@@ -479,12 +321,13 @@ public static class OkColor
         double k1 = 0.0d;
         double k2 = 1.0d;
 
-        double s = hsl.s;
         if (s < mid)
         {
             t = midInv * s;
+
             k1 = mid * c0;
             if (cMid != 0.0d) { k2 = (1.0d - k1 / cMid); }
+
             double kDenom = 1.0d - k2 * t;
             if (kDenom != 0.0d) { C = t * k1 / kDenom; }
         }
@@ -492,11 +335,14 @@ public static class OkColor
         {
             double tDenom = 1.0d - mid;
             if (tDenom != 0.0d) { t = (s - mid) / tDenom; }
+
             k0 = cMid;
             if (c0 != 0.0d) { k1 = (1.0d - mid) * cMid * cMid * midInv * midInv / c0; }
+
             double cDenom = cMax - cMid;
             k2 = 1.0d;
             if (cDenom != 0.0d) { k2 = 1.0d - k1 / cDenom; }
+
             double kDenom = 1.0d - k2 * t;
             if (kDenom != 0.0d) { C = k0 + t * k1 / kDenom; }
         }
@@ -512,9 +358,13 @@ public static class OkColor
     public static (double L, double a, double b) OkHsvToOkLab (in (double h, double s, double v) hsv)
     {
         double v = hsv.v;
-        if (v < Single.Epsilon) { return (L: 0.0d, a: 0.0d, b: 0.0d); }
+        if (v <= 0.0d) { return (L: 0.0d, a: 0.0d, b: 0.0d); }
+        if (v > 1.0d) { v = 1.0d; }
 
         double s = hsv.s;
+        if (s < 0.0d) { s = 0.0d; }
+        if (s > 1.0d) { s = 1.0d; }
+
         double hRad = hsv.h * 6.283185307179586d;
         double a_ = Math.Cos (hRad);
         double b_ = Math.Sin (hRad);
@@ -552,10 +402,12 @@ public static class OkColor
         L = lNew;
 
         var rgbScale = OkColor.OkLabToLinearSrgb ((L: lvt, a: a_ * cvt, b: b_ * cvt));
-        double rgbMax = Math.Max (rgbScale.r, Math.Max (rgbScale.g, Math.Max (rgbScale.b, 0.0d)));
-        double invRgbMax = 0.0d;
-        if (rgbMax != 0.0d) { invRgbMax = 1.0d / rgbMax; }
-        double lScale = Math.Pow (invRgbMax, 1.0d / 3.0d);
+        double maxComp = Math.Max (rgbScale.r, Math.Max (rgbScale.g, Math.Max (rgbScale.b, 0.0d)));
+        double lScale = 0.0d;
+        if (maxComp != 0.0d)
+        {
+            lScale = Math.Pow (1.0d / maxComp, 1.0d / 3.0d);
+        }
 
         C = C * lScale;
         return (
@@ -595,8 +447,9 @@ public static class OkColor
         if (L > 1.0d - Single.Epsilon) { return (h: 0.0d, s: 0.0d, l: 1.0d); }
         if (L < Single.Epsilon) { return (h: 0.0d, s: 0.0d, l: 0.0d); }
 
+        // This has to be gt epsilon, not gt zero to avoid glitches.
         double Csq = lab.a * lab.a + lab.b * lab.b;
-        if (Csq > 0.0d)
+        if (Csq > Single.Epsilon)
         {
             double C = Math.Sqrt (Csq);
             double a_ = lab.a / C;
@@ -620,16 +473,22 @@ public static class OkColor
                 double k1 = mid * c0;
                 double k2 = 1.0d;
                 if (cMid != 0.0d) { k2 = (1.0d - k1 / cMid); }
+
                 double tDenom = k1 + k2 * C;
                 double t = 0.0d;
                 if (tDenom != 0.0d) { t = C / tDenom; }
+
                 s = t * mid;
             }
             else
             {
                 double k0 = cMid;
                 double k1 = 0.0d;
-                k1 = (1.0d - mid) * cMid * cMid * midInv * midInv / c0;
+                if (c0 != 0.0d)
+                {
+                    k1 = (1.0d - mid) * cMid * cMid * midInv * midInv / c0;
+                }
+
                 double cDenom = cMax - cMid;
                 double k2 = 1.0d;
                 if (cDenom != 0.0d) { k2 = 1.0d - k1 / cDenom; }
@@ -637,6 +496,7 @@ public static class OkColor
                 double tDenom = k1 + k2 * (C - k0);
                 double t = 0.0d;
                 if (tDenom != 0.0d) { t = (C - k0) / tDenom; }
+
                 s = mid + (1.0d - mid) * t;
             }
 
@@ -654,8 +514,9 @@ public static class OkColor
         if (L > 1.0d - Single.Epsilon) { return (h: 0.0d, s: 0.0d, v: 1.0d); }
         if (L < Single.Epsilon) { return (h: 0.0d, s: 0.0d, v: 0.0d); }
 
+        // This has to be gt epsilon, not gt zero to avoid glitches.
         double csq = lab.a * lab.a + lab.b * lab.b;
-        if (csq > 0.0d)
+        if (csq > Single.Epsilon)
         {
             double C = Math.Sqrt (csq);
             double a_ = lab.a / C;
@@ -690,10 +551,12 @@ public static class OkColor
                     b: b_ * cvt));
             double scaleDenom = Math.Max (rgbScale.r, Math.Max (rgbScale.g, Math.Max (rgbScale.b, 0.0d)));
             double lScale = 0.0d;
-            lScale = Math.Pow (1.0d / scaleDenom, 1.0d / 3.0d);
-
-            L = L / lScale;
-            C = C / lScale;
+            if (scaleDenom != 0.0d)
+            {
+                lScale = Math.Pow (1.0d / scaleDenom, 1.0d / 3.0d);
+                L = L / lScale;
+                C = C / lScale;
+            }
 
             double toel = OkColor.Toe (L);
             C = C * toel / L;
@@ -752,26 +615,37 @@ public static class OkColor
         return 0.04045d < a ? Math.Pow ((a + 0.055d) / 1.055d, 2.4d) : a / 12.92d;
     }
 
-    static double Toe (in double x)
-    {
-        double k_1 = 0.206d;
-        double k_2 = 0.03d;
-        double k_3 = (1.0d + k_1) / (1.0d + k_2);
-        return 0.5d * (k_3 * x - k_1 + Math.Sqrt ((k_3 * x - k_1) * (k_3 * x - k_1) + 4.0d * k_2 * k_3 * x));
-    }
-
-    static double ToeInv (in double x)
-    {
-        double k_1 = 0.206d;
-        double k_2 = 0.03d;
-        double k_3 = (1.0d + k_1) / (1.0d + k_2);
-        return (x * x + k_1 * x) / (k_3 * (x + k_2));
-    }
-
     static (double S, double T) ToSt (in (double L, double C) cusp)
     {
         double L = cusp.L;
         double C = cusp.C;
-        return (S: C / L, T: C / (1.0d - L));
+        if (L != 0.0d && L != 1.0d)
+        {
+            return (S: C / L, T: C / (1.0d - L));
+        }
+        else if (L != 0.0d)
+        {
+            return (S: C / L, T: 0.0d);
+        }
+        else if (L != 1.0d)
+        {
+            return (S: 0.0d, T: C / (1.0d - L));
+        }
+        else
+        {
+            return (S: 0.0d, T: 0.0d);
+        }
+    }
+
+    static double Toe (in double x)
+    {
+        double y = 1.170873786407767d * x - 0.206d;
+        return 0.5d * (y + Math.Sqrt (y * y + 0.14050485436893204d * x));
+    }
+
+    static double ToeInv (in double x)
+    {
+        double denom = 1.170873786407767d * (x + 0.03d);
+        return (denom != 0.0) ? (x * x + 0.206d * x) / denom : 0.0d;
     }
 }
