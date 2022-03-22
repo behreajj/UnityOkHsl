@@ -16,11 +16,11 @@ The `Generate` button updates a Unity `Gradient` according to the `Fore` and `Ba
 
 The hue for grays is left at zero to follow convention. This will cause problems when, for example, creating a gradient from a gray to a saturated color or when sorting colors by hue. For that reason, if either `Fore` or `Back` colors are gray, then gradient generation will default `OkLab`.
 
-Beware that discontinuities develop at high saturation, particularly around darker blues, such as #0306FF (in OkHsl, `264.2793` hue, `100` saturation, `36.92266` lightness).
+Beware that discontinuities develop at high saturation, particularly around darker blues, such as `#0306FF` (in OkHsl, `264.2793` hue, `100` saturation, `36.92266` lightness).
 
 ## Changes
 
-The original code has been modified to handle edge cases for black, white and grays. There are some measures to prevent the passing of invalid values to division or square-root. The C# implementation uses double-, rather than single-, precision (`double`s instead of `float`s). Furthermore, it uses tuples to avoid specialized `struct`s.
+The original code has been modified to handle edge cases for black, white and grays. There are some measures to prevent the passing of invalid values to division or square-root. The C# implementation uses double-, rather than single-, precision (`double`s instead of `float`s). Furthermore, it uses tuples to avoid specialized `struct`s. Unused methods have been removed.
 
 ## License
 

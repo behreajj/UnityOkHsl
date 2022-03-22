@@ -26,9 +26,37 @@ public static class OkUnityBridge
         return Math.Min (Math.Max (a, lb), ub);
     }
 
+    public static double DistAngleUnsigned (in double origin, in double dest, in double range = 1.0d)
+    {
+        double halfRange = range * 0.5d;
+        return halfRange - Math.Abs (Math.Abs (RemFloor (dest, range) - RemFloor (origin, range)) - halfRange);
+    }
+
     public static double Lerp (in double a, in double b, in double t = 0.5d)
     {
         return (1.0d - t) * a + t * b;
+    }
+
+    public static double LerpAngleFar (in double origin, in double dest, in double t = 0.5d, in double range = 1.0d)
+    {
+        double halfRange = range * 0.5d;
+        double o = RemFloor (origin, range);
+        double d = RemFloor (dest, range);
+        double diff = d - o;
+        double u = 1.0d - t;
+
+        if (diff == 0.0d || (o < d && diff < halfRange))
+        {
+            return RemFloor (u * (o + range) + t * d, range);
+        }
+        else if (o > d && diff > -halfRange)
+        {
+            return RemFloor (u * o + t * (d + range), range);
+        }
+        else
+        {
+            return u * o + t * d;
+        }
     }
 
     public static double LerpAngleNear (in double origin, in double dest, in double t = 0.5d, in double range = 1.0d)
@@ -99,14 +127,10 @@ public static class OkUnityBridge
     public static (double L, double a, double b) LerpLab (in (double L, double a, double b) a, in (double L, double a, double b) b,
         double t = 0.5d)
     {
-        double cl = OkUnityBridge.Lerp (a.L, b.L, t);
-        double ca = OkUnityBridge.Lerp (a.a, b.a, t);
-        double cb = OkUnityBridge.Lerp (a.b, b.b, t);
-
         return (
-            L: OkUnityBridge.Lerp (a.L, b.L, t),
-            a : OkUnityBridge.Lerp (a.a, b.a, t),
-            b : OkUnityBridge.Lerp (a.b, b.b, t));
+            L: Lerp (a.L, b.L, t),
+            a : Lerp (a.a, b.a, t),
+            b : Lerp (a.b, b.b, t));
     }
 
     public static double RemFloor (in double a, in double b)

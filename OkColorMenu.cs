@@ -33,8 +33,16 @@ public class OkColorMenu : EditorWindow
     {
         Near = 0,
         Clockwise = 1,
-        CounterClockwise = 2
+        CounterClockwise = 2,
+        Far = 3
     }
+
+    public const int MaxKeyCount = 8;
+    public const double HueYellow = 0.304914533545892d;
+    public const double HueBlue = HueYellow + 0.5d;
+    public const double HueGreen = 146.0d / 360.0d;
+    public const double HueShadow = 291.0d / 360.0d;
+    public const double HueDay = 96.0d / 360.0d;
 
     static Mode mode = Mode.OkHsl;
     static HueEasing hueEasing = HueEasing.Near;
@@ -57,10 +65,43 @@ public class OkColorMenu : EditorWindow
     static Func<double, double, double, double, double> hueFunc = (a, b, c, d) => OkUnityBridge.LerpAngleNear (a, b, c, d);
 
     static Gradient gradient = new Gradient ( );
+    static Gradient shades = new Gradient ( );
 
     [MenuItem ("Window/OkColor")]
     static void Init ( )
     {
+        gradient.SetKeys (new GradientColorKey[ ]
+        {
+            new GradientColorKey (new Color (1.0f, 0.0f, 0.0f, 1.0f), 0.0f),
+                new GradientColorKey (new Color (0.9665875f, 0.0f, 0.471451f, 1.0f), 0.1428571f),
+                new GradientColorKey (new Color (0.9013672f, 0.0001537915f, 0.7556401f, 1.0f), 0.2857143f),
+                new GradientColorKey (new Color (0.7519007f, 0.1942044f, 0.9999999f, 1.0f), 0.4285715f),
+                new GradientColorKey (new Color (0.51731f, 0.4186569f, 1.0f, 1.0f), 0.5714286f),
+                new GradientColorKey (new Color (0.227677f, 0.5083964f, 1.0f, 1.0f), 0.7142857f),
+                new GradientColorKey (new Color (0.0f, 0.5792553f, 0.8038571f, 1.0f), 0.8571429f),
+                new GradientColorKey (new Color (0.0f, 0.6039216f, 0.6745098f, 1.0f), 1.0f)
+        }, new GradientAlphaKey[ ]
+        {
+            new GradientAlphaKey (1.0f, 0.0f),
+                new GradientAlphaKey (1.0f, 1.0f)
+        });
+
+        shades.SetKeys (new GradientColorKey[ ]
+        {
+            new GradientColorKey (new Color (0.2264238f, 0.0f, 0.127922f, 1.0f), 0.1428571f),
+                new GradientColorKey (new Color (0.4338861f, 0.0f, 0.1902658f, 1.0f), 0.2857143f),
+                new GradientColorKey (new Color (0.6498392f, 0.0f, 0.190087f, 1.0f), 0.4285714f),
+                new GradientColorKey (new Color (0.8775765f, 0.0f, 0.0f, 1.0f), 0.5714286f),
+                new GradientColorKey (new Color (1.0f, 0.3361318f, 0.0861003f, 1.0f), 0.7142857f),
+                new GradientColorKey (new Color (1.0f, 0.6122944f, 0.4257437f, 1.0f), 0.8571429f),
+                new GradientColorKey (new Color (1.0f, 0.8188902f, 0.7030936f, 1.0f), 1.0f)
+        }, new GradientAlphaKey[ ]
+        {
+            new GradientAlphaKey (1.0f, 0.0f),
+                new GradientAlphaKey (1.0f, 1.0f)
+        });
+        shades.mode = GradientMode.Fixed;
+
         OkColorMenu window = (OkColorMenu) EditorWindow.GetWindow (
             t: typeof (OkColorMenu),
             utility: false,
@@ -207,6 +248,11 @@ public class OkColorMenu : EditorWindow
                         hueFunc = (a, b, c, d) => OkUnityBridge.LerpAngleCcw (a, b, c, d);
                     }
                     break;
+                case HueEasing.Far:
+                    {
+                        hueFunc = (a, b, c, d) => OkUnityBridge.LerpAngleFar (a, b, c, d);
+                    }
+                    break;
                 case HueEasing.Near:
                 default:
                     {
@@ -218,11 +264,9 @@ public class OkColorMenu : EditorWindow
 
         if (GUILayout.Button ("Generate"))
         {
-            // Max No. of keys allowed by Unity gradients is 8.
-            int count = 8;
-            float toFac = 1.0f / (count - 1.0f);
+            float toFac = 1.0f / (MaxKeyCount - 1.0f);
 
-            GradientColorKey[ ] uckeys = new GradientColorKey[count];
+            GradientColorKey[ ] uckeys = new GradientColorKey[MaxKeyCount];
             (double r, double g, double b) aRgb = (r: aColor.r, g: aColor.g, b: aColor.b);
             (double r, double g, double b) bRgb = (r: bColor.r, g: bColor.g, b: bColor.b);
             (double L, double a, double b) aLab = OkColor.SrgbToOkLab (aRgb);
@@ -243,7 +287,7 @@ public class OkColorMenu : EditorWindow
                     {
                         (double h, double s, double l) aHsl = OkColor.OkLabToOkHsl (aLab);
                         (double h, double s, double l) bHsl = OkColor.OkLabToOkHsl (bLab);
-                        for (int i = 0; i < count; ++i)
+                        for (int i = 0; i < MaxKeyCount; ++i)
                         {
                             float fac = i * toFac;
                             double ch = hueFunc (aHsl.h, bHsl.h, fac, 1.0d);
@@ -261,14 +305,15 @@ public class OkColorMenu : EditorWindow
                     {
                         (double h, double s, double v) aHsv = OkColor.OkLabToOkHsv (aLab);
                         (double h, double s, double v) bHsv = OkColor.OkLabToOkHsv (bLab);
-                        for (int i = 0; i < count; ++i)
+                        for (int i = 0; i < MaxKeyCount; ++i)
                         {
                             float fac = i * toFac;
                             double ch = hueFunc (aHsv.h, bHsv.h, fac, 1.0d);
                             double cs = OkUnityBridge.Lerp (aHsv.s, bHsv.s, fac);
                             double cv = OkUnityBridge.Lerp (aHsv.v, bHsv.v, fac);
                             (double h, double s, double v) cHsv = (h: ch, s: cs, v: cv);
-                            (double r, double g, double b) cRgb = OkColor.OkHsvToSrgb (cHsv);
+                            (double L, double a, double b) cLab = OkColor.OkHsvToOkLab (cHsv);
+                            (double r, double g, double b) cRgb = OkColor.OkLabToSrgb (cLab);
                             Color cColor = OkUnityBridge.RgbToColor (cRgb);
                             uckeys[i] = new GradientColorKey (cColor, fac);
                         }
@@ -277,7 +322,7 @@ public class OkColorMenu : EditorWindow
                 case Mode.OkLab:
                 default:
                     {
-                        for (int i = 0; i < count; ++i)
+                        for (int i = 0; i < MaxKeyCount; ++i)
                         {
                             float fac = i * toFac;
                             (double L, double a, double b) cLab = OkUnityBridge.LerpLab (aLab, bLab, fac);
@@ -298,13 +343,71 @@ public class OkColorMenu : EditorWindow
             gradient.SetKeys (uckeys, uakeys);
             gradient.mode = GradientMode.Blend;
         }
+
+        EditorGUILayout.Space ( );
+        shades = EditorGUILayout.GradientField (
+            label: new GUIContent ("Shades"),
+            value: shades,
+            hdr: false);
+        if (GUILayout.Button ("Generate"))
+        {
+            (double r, double g, double b) aRgb = (r: aColor.r, g: aColor.g, b: aColor.b);
+            (double L, double a, double b) aLab = OkColor.SrgbToOkLab (aRgb);
+            (double h, double s, double l) aHsl = OkColor.OkLabToOkHsl (aLab);
+
+            double sat = aHsl.s;
+
+            double hue = aHsl.h;
+            double hueIncr = 0.125d;
+            double[ ] hues = new double[ ]
+            {
+                OkUnityBridge.LerpAngleNear (hue, HueShadow, hueIncr * 3, 1.0d),
+                OkUnityBridge.LerpAngleNear (hue, HueShadow, hueIncr * 2, 1.0d),
+                OkUnityBridge.LerpAngleNear (hue, HueShadow, hueIncr, 1.0d),
+                hue,
+                OkUnityBridge.LerpAngleNear (hue, HueDay, hueIncr, 1.0d),
+                OkUnityBridge.LerpAngleNear (hue, HueDay, hueIncr * 2, 1.0d),
+                OkUnityBridge.LerpAngleNear (hue, HueDay, hueIncr * 3, 1.0d),
+            };
+
+            double lightIncr = 0.125d;
+            double[ ] lights = new double[ ]
+            {
+                0.5f - lightIncr * 3,
+                0.5f - lightIncr * 2,
+                0.5f - lightIncr,
+                0.5f,
+                0.5f + lightIncr,
+                0.5f + lightIncr * 2,
+                0.5f + lightIncr * 3,
+            };
+
+            GradientColorKey[ ] uckeys = new GradientColorKey[7];
+            for (int i = 0; i < 7; ++i)
+            {
+                (double h, double s, double l) cHsl = (h: hues[i], s: sat, l: lights[i]);
+                (double L, double a, double b) cLab = OkColor.OkHslToOkLab (cHsl);
+                (double r, double g, double b) cRgb = OkColor.OkLabToSrgb (cLab);
+                Color cColor = OkUnityBridge.RgbToColor (cRgb);
+                uckeys[i] = new GradientColorKey (cColor, (i + 1.0f) / 7.0f);
+            }
+
+            GradientAlphaKey[ ] uakeys = new GradientAlphaKey[ ]
+            {
+                new GradientAlphaKey (aColor.a, 0.0f),
+                new GradientAlphaKey (aColor.a, 1.0f)
+            };
+
+            shades.SetKeys (uckeys, uakeys);
+            shades.mode = GradientMode.Fixed;
+        }
     }
 
     static void GetColor (in Color c)
     {
         (double r, double g, double b) rgb = (r: c.r, g: c.g, b: c.b);
-        (double l, double a, double b) lab = OkColor.SrgbToOkLab (rgb);
-        lOkLab = (float) (lab.l * 100.0d);
+        (double L, double a, double b) lab = OkColor.SrgbToOkLab (rgb);
+        lOkLab = (float) (lab.L * 100.0d);
         aOkLab = (float) (lab.a * 100.0d);
         bOkLab = (float) (lab.b * 100.0d);
 
@@ -326,30 +429,27 @@ public class OkColorMenu : EditorWindow
         {
             case Mode.OkLab:
                 {
-                    (double l, double a, double b) lab = (
-                        l: lOkLab * 0.01d,
+                    rgb = OkColor.OkLabToSrgb ((
+                        L: lOkLab * 0.01d,
                         a: aOkLab * 0.01d,
-                        b: bOkLab * 0.01d);
-                    rgb = OkColor.OkLabToSrgb (lab);
+                        b: bOkLab * 0.01d));
                 }
                 break;
             case Mode.OkHsv:
                 {
-                    (double h, double s, double v) hsv = (
+                    rgb = OkColor.OkHsvToSrgb ((
                         h: hOkHsv / 360.0d,
                         s: sOkHsv * 0.01d,
-                        v: vOkHsv * 0.01d);
-                    rgb = OkColor.OkHsvToSrgb (hsv);
+                        v: vOkHsv * 0.01d));
                 }
                 break;
             case Mode.OkHsl:
             default:
                 {
-                    (double h, double s, double l) hsl = (
+                    rgb = OkColor.OkHslToSrgb ((
                         h: hOkHsl / 360.0d,
                         s: sOkHsl * 0.01d,
-                        l: lOkHsl * 0.01d);
-                    rgb = OkColor.OkHslToSrgb (hsl);
+                        l: lOkHsl * 0.01d));
                 }
                 break;
         }
